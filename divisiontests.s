@@ -17,7 +17,7 @@ SECTION .data
 
 	partieentiere dw 0
 	rangpartent		dw 0
-
+ 
 SECTION .bss
 
 ; Programme principal
