@@ -205,6 +205,6 @@ lastdigit:
 	mov ecx,quotient
 	mov dx,1	
 	int 80H	
-
+ 
 	jmp fin
 	
