@@ -123,7 +123,7 @@ afficherdigit:
 
 	pop dx
 	cmp dx,0
-	ja afficherpartiedecimale		;	si il y a un reste il faut afficher la partie décimale
+	ja afficherpartiedecimale		; si il y a un reste il faut afficher la partie décimale
 	je fin							; sinon on peut arrêter le traitement
 
 fin:
