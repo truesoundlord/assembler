@@ -3,21 +3,21 @@
 
 SECTION .data
 
-; SECTION .bss
-; Block Starting Symbol
-; Variables statiques ou non initialisées qui sont censées
-; changer pendant l'exécution du programme
-
 	quotient	dw 0
-	reste			dw 0
+	reste		dw 0
 
 	dividande	dw 65000
 	diviseur	dw 5
 	precision	dw 15				; precision x+1 chiffres après la virgule
 
-	partieentiere dw 0
-	rangpartent		dw 0
- 
+	rangpartent	dw 0
+	displayme	dw 0
+
+; SECTION .bss
+; Block Starting Symbol
+; Variables statiques ou non initialisées qui sont censées
+; changer pendant l'exécution du programme
+
 SECTION .bss
 
 ; Programme principal
@@ -25,32 +25,39 @@ SECTION .bss
 
 SECTION .text
 
-
 global _start
 
 _start:
 	
-	mov dx,0
+	mov dx,0				
 	mov ax,[dividande]
 	mov bx,[diviseur]
 
-	div bx										; ah va contenir le reste et al va contenir la partie entière (mode byte)
-														; mode WORD
-														; ax partie entière 
-														; dx reste de la division
+	div bx	; ah va contenir le reste et al va contenir la partie entière (mode byte)
+			; mode WORD
+			; ax partie entière 
+			; dx reste de la division
 
 	mov [quotient],ax					
 	mov [reste],dx
-	mov bx,10										; on se prépare à déterminer le rang...
+	mov bx,10						; on se prépare à déterminer le rang...
 	mov ax,10
 
 	cmp WORD [quotient],9
-	mov dx,0										; pour éviter les FPE ???
-	ja	determinerrang					; si le quotient occupe plus d'un caractère il faut effectuer l'affichage de l'unité pour chaque rang
-	jbe afficherdigit						; sinon
+	mov dx,0						; pour éviter les FPE ???
+	ja	determinerrang				; si le quotient occupe plus d'un caractère il faut effectuer l'affichage de l'unité pour chaque rang
+	jbe afficherdigit				; sinon
+
+; en assembleur on ne peut pas afficher par exemple 1200 d'un "seul coup"
+; comme en C avec la fonction printf()...
+; nous pourrions bien sûr invoquer printf() à partir de l'assembleur
+; mais je ne maîtrise pas du tout la technique
+
+; nous allons donc devoir afficher les caractères formant la partie entière
+; un par un
 
 determinerrang:
-	mul bx											; ax contient le résultat
+	mul bx							; ax contient le résultat
 	cmp WORD ax,[quotient]
 	mov WORD [rangpartent],ax
 	jbe determinerrang
@@ -64,22 +71,22 @@ determinerrang:
 
 	mov WORD ax,[quotient]
 	mov WORD bx,[rangpartent]
-	div bx											; à partir d'ici nous devrions pouvoir afficher les caractères...
+	div bx							; à partir d'ici nous devrions pouvoir afficher les caractères...
 
 diminuerrang:	
-	mov WORD [partieentiere],ax
+	mov WORD [displayme],ax
 	
 	mov ax,4
 	mov bx,1
-	add WORD [partieentiere],48
-	mov ecx,partieentiere									
-	push dx											; sauvegarder le reste de la division
+	add WORD [displayme],48
+	mov ecx,displayme									
+	push dx							; sauvegarder le reste de la division
 	mov dx,1
 	int 80H
 	pop dx
 
-	sub WORD [partieentiere],48
-	mov ax,[partieentiere]
+	sub WORD [displayme],48
+	mov ax,[displayme]
 	mov bx,[rangpartent]
 	mul bx
 	sub WORD [quotient],ax
@@ -99,13 +106,13 @@ diminuerrang:
 	
 	cmp WORD [quotient],0
 	jnz diminuerrang
-	cmp WORD [rangpartent],1							; cas du 10000/2 (tant que le rang n'est pas 1 ou 10^0 on doit afficher les 0)
+	cmp WORD [rangpartent],1		; cas du 10000/2 (tant que le rang n'est pas 1 ou 10^0 on doit afficher les 0)
 	jnz diminuerrang
 
 afficherdigit:
 	
 	mov WORD dx,[reste]
-	push dx											; dans le cas de la partie entière d'un seul digit, le reste de la division se trouve dans 'reste'
+	push dx							; dans le cas de la partie entière d'un seul digit, le reste de la division se trouve dans 'reste'
 	add WORD [quotient],48
 
 	mov ax,4
@@ -117,15 +124,15 @@ afficherdigit:
 	pop dx
 	cmp dx,0
 	ja afficherpartiedecimale		;	si il y a un reste il faut afficher la partie décimale
-	je fin											; sinon on peut arrêter le traitement
+	je fin							; sinon on peut arrêter le traitement
 
 fin:
 	
-	mov WORD [partieentiere],10
+	mov WORD [displayme],10
 
 	mov ax,4
 	mov bx,1
-	mov ecx,partieentiere
+	mov ecx,displayme
 	mov dx,1	
 	int 80H
 
@@ -134,14 +141,14 @@ fin:
 	int 80H
 
 afficherpartiedecimale:
-	cmp WORD dx,0											; ceci au cas où nous venions du "bloc" 'diminuerrang'
+	cmp WORD dx,0					; ceci au cas où nous venions du "bloc" 'diminuerrang'
 	jz fin
 
-	mov WORD [partieentiere],','
+	mov WORD [displayme],','
 	
 	mov ax,4
 	mov bx,1
-	mov ecx,partieentiere
+	mov ecx,displayme
 	mov dx,1	
 	int 80H
 
@@ -194,7 +201,7 @@ arrondir:
 	; faut-il arrondir en fonction de cette dernière division ?
 	
 	cmp WORD bx,5
-	jbe lastdigit							; si plus petit ou égal à 5 on l'affiche tel quel
+	jbe lastdigit					; si plus petit ou égal à 5 on l'affiche tel quel
 	add WORD [quotient],1			; si plus grand que 5 on "arrondi"
 	
 lastdigit:
