@@ -6,12 +6,15 @@ SECTION .data
 	quotient	dw 0
 	reste			dw 0
 
-	dividande	dw 65000
-	diviseur	dw 874
+	dividande	dw 15	
+	diviseur	dw 5
 	precision	dw 15				; precision x+1 chiffres après la virgule
 
 	rangpartent	dw 0
 	displayme		dw 0
+
+	szDividande			db 0,0,0,0,0,0,0,0,0
+	tailleDividande	equ $-szDividande
 
 	Err_000		db	"Error: no null terminated string !!",10,0
 	szErr_000	equ	$-Err_000
@@ -31,8 +34,10 @@ SECTION .bss
 
 MAXARGS		equ		3
 ArgCount	resd	1
-ArgPtrs		resq	65536
-ArgLens		resd	65536			
+ArgPtrs		resq	3
+Caractere	resb	1
+
+
 
 SECTION .text
 
@@ -50,7 +55,7 @@ _start:
 	pop rcx
 	cmp rcx,MAXARGS
 	ja fin
-	cmp rcx,0
+	cmp rcx,1
 	jz ErrorNoParams
 	
 	mov DWORD [ArgCount],ecx
@@ -58,10 +63,8 @@ _start:
 	
 	
 recupererarguments:
-	; pop QWORD [ArgPtrs + edx*8]			; récupérer les arguments et les placer dans ArgPtrs
 
 	pop rsi
-	;sub rsp,8
 	
 	mov rdi,ArgPtrs
 											
@@ -71,64 +74,253 @@ recupererarguments:
 	push rcx
 
 	xor rcx,rcx
-	mov ecx,0000ffffh
+	mov r8,0
 	cld
+
 copierdatas:
-	lodsb											; va charger un byte et le mettre dans al
+
+	lodsb											; va charger un byte de rsi et le mettre dans al
 	stosb											; on va mettre le caractère de al dans ArgPtrs[edx]
-	cmp al,0									
+	
+	inc r8
+
+	cmp al,0	
 	jne copierdatas						; tant que '\0' pas trouvé on continue...
 
+	; afficher le paramètre (debug)
+
+	push rax
+	push rbx
+	push rcx
+	push rdx
+
+	mov ax,4
+	mov bx,1
+	mov ecx,ArgPtrs
+	mov rdx,r8
+	int 80H
+
+	mov BYTE [Caractere],10
+	mov ax,4
+	mov bx,1
+	mov ecx,Caractere
+	mov rdx,1
+	int 80H
+
+	pop rdx
+	pop rcx
+	pop rbx
+	pop rax
+
+	; fin du debug
+
+	pop rcx
+	pop rdx
+	
+	dec r8										; ne pas envisager le '\0'
+	dec r8										; sinon on va dépasser le rang effectif
+	
+	mov r12,r8								; pour pouvoir gérer tous les digits il faut garder une trace du nombre de rangs (r8 être modifié)
+	mov rsi,ArgPtrs						;	lodsb
+	mov rdi,szDividande				; stosb
+
+	push rdx
+	push rcx
+	push r12
+
+	; il faut s'assurer que r8 soit supérieur à 1 sinon ça va foirer !!!
+	
+	cmp r8,1
+	jb unseuldigit
+	jmp preparetocopy
+	
+unseuldigit:
+
+	cmp edx,1
+	je unseuldigitdividande
+	ja unseuldigitdiviseur
+	jmp continuer
+
+preparetocopy:
+
+	cmp edx,1									; ridicule mais bon
+	je copierDividande
+	jmp continuer
+
+copierDividande:
+	; on devrait avoir la taille (on a pas touché à r8) donc il est possible de convertir
+
+	
+
+	nop												; le débugger me casse les couilles
+	xor rax,rax
+	lodsb											; al devrait contenir le digit représentant le rang le plus élevé
+	stosb											; al sera recopié dans szDividande
+	
+	xor rbx,rbx
+	sub al,48
+	
+	mov r9,rax								; sauvegarder le nombre
+	mov al,1				
+	mov bx,10									; BASE 10
+	
+multiplierrang_dividande:
+
+	; multiplier par le nombre de rangs
+	mul bx
+	dec r8
+	cmp r8,0
+	ja multiplierrang_dividande
+	
+	; al contient le rang
+	; R9 contient le nombre
+	
+	mov rbx,rax
+	mov rax,r9
+	mul bx										; multiplier R9*rax (1000*1 100*7 10*6)
+	
+	; r10 va recevoir le résultat de la multiplication
+	add r10,rax
+	
+	mov r8,r12								
+	dec r8	
+	dec r12										; à chaque fois le nombre de rangs doit diminuer
+	
+	cmp r12,0									; traiter les unités ?	
+	ja copierDividande
+
+unseuldigitdividande:	
+	
+	; pas sûr (en fait si ^^)	
+	xor eax,eax
+	lodsb
+	stosb
+	sub al,48
+	add r10,rax								; on ajoute les unités
+	
+	; nous avons le dividande
+	mov r13,r10
+	mov al,0
+	stosb											; ajouter le '\0'
+
+continuer:
+
+	xor r8,r8
+	xor r9,r9
+	xor r10,r10
+	
+	pop r12
 	pop rcx
 	pop rdx
 
 	inc edx
-	add rdi,8
-
+	
 	cmp edx,ecx
 	jb recupererarguments
 
+	mov rsi,ArgPtrs						; remetre RSI sur la bonne position
+	mov r8,r12								; récupérer la taille de la chaîne
+	
+copierDiviseur:	
+
+	nop												; le débugger me casse les couilles
+	xor rax,rax
+	lodsb											; al devrait contenir le digit représentant le rang le plus élevé
+	
+	xor rbx,rbx
+	sub al,48
+	
+	mov r9,rax								; sauvegarder le nombre
+	mov al,1				
+	mov bx,10									; BASE 10
+
+multiplierrang_diviseur:
+
+	; multiplier par le nombre de rangs
+	mul bx
+	dec r8
+	cmp r8,0
+	ja multiplierrang_diviseur
+	
+	; al contient le rang
+	; R9 contient le nombre
+	
+	mov rbx,rax
+	mov rax,r9
+	mul bx										; multiplier R9*rax (1000*1 100*7 10*6)
+	
+	; r10 va recevoir le résultat de la multiplication
+	add r10,rax
+	
+	mov r8,r12								
+	dec r8	
+	dec r12										; à chaque fois le nombre de rangs doit diminuer
+	
+	cmp r12,0									; traiter les unités ?	
+	ja copierDiviseur
+
+unseuldigitdiviseur:	
+	
+	; pas sûr (en fait si ^^)	
+	xor eax,eax
+	lodsb
+	sub al,48
+	add r10,rax								; on ajoute les unités
+	
+	; nous avons le diviseur
+	mov r14,r10
+
 	xor eax,eax
 	xor ebx,ebx
-
-determinertailles:
-	mov ecx,0000ffffh
-	mov edi,DWORD [ArgPtrs + ebx*8]	; scasb se sert d'EDI et non de ESI pour "scanner" chaque octet de la chaîne de caractères...
-	mov edx,edi
-	cld
-	repne scasb											; tant que al n'est pas 0 "scanner" edi 
-	jnz ErrorZero
-	mov BYTE [edi-1],10							; ajouter le '\n' d'office
-	sub edi,edx											; déterminer le déplacement entre le début de la chaîne et le '\0'		
-	mov DWORD [ArgLens + ebx*4],edi	; sauvegarder les données
-	inc ebx
-	cmp ebx,[ArgCount]							; changer d'argument si on en a encore à traiter...	
-	jb determinertailles
-
-	; ici nous sommes bons, nous avons les tailles pour afficher les arguments
-	; et nous pouvons tenter de convertir les argv[1] et argv[2]
-
-
+	xor ecx,ecx
+	xor edx,edx
 	
+preparetodivide:	
+	
+	mov rax,r13
+	mov rbx,r14 
 
-	mov dx,0				
+	mov WORD [dividande],ax
+	mov WORD [diviseur],bx
+
+	cmp BYTE [diviseur],0			; éviter que le diviseur soit à 0
+	je ErrorDivZ
+
+	cmp BYTE [diviseur],1			; recopier le dividande
+	ja demonstration
+
+	mov ax,4
+	mov bx,1
+	mov ecx,szDividande
+	mov rdx,tailleDividande
+	int 80H
+	
+	jmp fin
+
+demonstration:
+
+	xor ax,ax
+	xor bx,bx
+	xor cx,cx
+	xor dx,dx
+			
 	mov ax,[dividande]
-	mov bx,[diviseur]
+	mov bx,[diviseur]	
 
 	div bx	; ah va contenir le reste et al va contenir la partie entière (mode byte)
-			; mode WORD
-			; ax partie entière 
-			; dx reste de la division
+					; mode WORD
+					; ax partie entière 
+					; dx reste de la division
 
 	mov [quotient],ax					
 	mov [reste],dx
-	mov bx,10						; on se prépare à déterminer le rang...
+	mov bx,10									; on se prépare à déterminer le rang...
 	mov ax,10
 
 	cmp WORD [quotient],9
-	mov dx,0						; pour éviter les FPE ???
+	mov dx,0									; pour éviter les FPE ???
 	ja	determinerrang				; si le quotient occupe plus d'un caractère il faut effectuer l'affichage de l'unité pour chaque rang
-	jbe afficherdigit				; sinon
+	jbe afficherdigit					; sinon
 
 ; en assembleur on ne peut pas afficher par exemple 1200 d'un "seul coup"
 ; comme en C avec la fonction printf()...
@@ -139,7 +331,7 @@ determinertailles:
 ; un par un
 
 determinerrang:
-	mul bx							; ax contient le résultat
+	mul bx										; ax contient le résultat
 	cmp WORD ax,[quotient]
 	mov WORD [rangpartent],ax
 	jbe determinerrang
@@ -153,7 +345,7 @@ determinerrang:
 
 	mov WORD ax,[quotient]
 	mov WORD bx,[rangpartent]
-	div bx							; à partir d'ici nous devrions pouvoir afficher les caractères...
+	div bx										; à partir d'ici nous devrions pouvoir afficher les caractères...
 
 diminuerrang:	
 	mov WORD [displayme],ax
@@ -162,7 +354,7 @@ diminuerrang:
 	mov bx,1
 	add WORD [displayme],48
 	mov ecx,displayme									
-	push dx							; sauvegarder le reste de la division
+	push dx										; sauvegarder le reste de la division
 	mov dx,1
 	int 80H
 	pop dx
@@ -188,13 +380,13 @@ diminuerrang:
 	
 	cmp WORD [quotient],0
 	jnz diminuerrang
-	cmp WORD [rangpartent],1		; cas du 10000/2 (tant que le rang n'est pas 1 ou 10^0 on doit afficher les 0)
+	cmp WORD [rangpartent],1	; cas du 10000/2 (tant que le rang n'est pas 1 ou 10^0 on doit afficher les 0)
 	jnz diminuerrang
 
 afficherdigit:
 	
 	mov WORD dx,[reste]
-	push dx							; dans le cas de la partie entière d'un seul digit, le reste de la division se trouve dans 'reste'
+	push dx										; dans le cas de la partie entière d'un seul digit, le reste de la division se trouve dans 'reste'
 	add WORD [quotient],48
 
 	mov ax,4
@@ -205,9 +397,8 @@ afficherdigit:
 
 	pop dx
 	cmp dx,0
-	ja afficherpartiedecimale		; si il y a un reste il faut afficher la partie décimale
-	je fin							; sinon on peut arrêter le traitement
-
+	ja afficherpartiedecimale	; si il y a un reste il faut afficher la partie décimale
+	je fin										; sinon on peut arrêter le traitement
 
 fin:
 	
@@ -224,7 +415,7 @@ fin:
 	int 80H
 
 afficherpartiedecimale:
-	cmp WORD dx,0					; ceci au cas où nous venions du "bloc" 'diminuerrang'
+	cmp WORD dx,0							; ceci au cas où nous venions du "bloc" 'diminuerrang'
 	jz fin
 
 	mov WORD [displayme],','
@@ -284,8 +475,11 @@ arrondir:
 	; faut-il arrondir en fonction de cette dernière division ?
 	
 	cmp WORD bx,5
-	jbe lastdigit					; si plus petit ou égal à 5 on l'affiche tel quel
+	jbe lastdigit							; si plus petit ou égal à 5 on l'affiche tel quel
 	add WORD [quotient],1			; si plus grand que 5 on "arrondi"
+	cmp WORD [quotient],9			
+	jbe lastdigit
+	mov WORD [quotient],9			; tant pis
 	
 lastdigit:
 
@@ -299,8 +493,8 @@ lastdigit:
 	jmp fin
 
 ErrorNoParams:
-
-	jmp fin
+	jmp demonstration
 ErrorZero:
-	
+	jmp demonstration
+ErrorDivZ:
 	jmp fin
