@@ -6,20 +6,20 @@ SECTION .data
 	quotient	dw 0
 	reste			dw 0
 
-	dividande	dw 15	
-	diviseur	dw 5
+	dividande	dw 0
+	diviseur	dw 0
 	precision	dw 15				; precision x+1 chiffres après la virgule
 
 	rangpartent	dw 0
 	displayme		dw 0
 
-	szDividande			db 0,0,0,0,0,0,0,0,0
-	tailleDividande	equ $-szDividande
+	strDividande	db	0,0,0,0,0,0,0,0,0
+	szDividande		equ $-strDividande
 
-	Err_000		db	"Error: no null terminated string !!",10,0
-	szErr_000	equ	$-Err_000
 	Err_001		db	"Usage: ./asmdivision <16 bits number dividend> <16 bits number divisor>",10,0 
 	szErr_001	equ	$-Err_001
+	Err_002		db "Error: division by zero !!",10,0
+	szErr_002 equ $-Err_002
 
 ; SECTION .bss
 ; Block Starting Symbol
@@ -122,7 +122,7 @@ copierdatas:
 	
 	mov r12,r8								; pour pouvoir gérer tous les digits il faut garder une trace du nombre de rangs (r8 être modifié)
 	mov rsi,ArgPtrs						;	lodsb
-	mov rdi,szDividande				; stosb
+	mov rdi,strDividande			; stosb
 
 	push rdx
 	push rcx
@@ -149,8 +149,6 @@ preparetocopy:
 
 copierDividande:
 	; on devrait avoir la taille (on a pas touché à r8) donc il est possible de convertir
-
-	
 
 	nop												; le débugger me casse les couilles
 	xor rax,rax
@@ -291,8 +289,8 @@ preparetodivide:
 
 	mov ax,4
 	mov bx,1
-	mov ecx,szDividande
-	mov rdx,tailleDividande
+	mov ecx,strDividande
+	mov rdx,szDividande
 	int 80H
 	
 	jmp fin
@@ -380,7 +378,7 @@ diminuerrang:
 	
 	cmp WORD [quotient],0
 	jnz diminuerrang
-	cmp WORD [rangpartent],1	; cas du 10000/2 (tant que le rang n'est pas 1 ou 10^0 on doit afficher les 0)
+	cmp WORD [rangpartent],1	; cas du 10000/2 (tant que le rang n'est pas 1 -- ou 10^0 -- on doit afficher les 0)
 	jnz diminuerrang
 
 afficherdigit:
@@ -398,8 +396,7 @@ afficherdigit:
 	pop dx
 	cmp dx,0
 	ja afficherpartiedecimale	; si il y a un reste il faut afficher la partie décimale
-	je fin										; sinon on peut arrêter le traitement
-
+	
 fin:
 	
 	mov WORD [displayme],10
@@ -493,8 +490,21 @@ lastdigit:
 	jmp fin
 
 ErrorNoParams:
-	jmp demonstration
-ErrorZero:
-	jmp demonstration
+	mov ax,4
+	mov bx,1
+	mov ecx,Err_001
+	mov dx,szErr_001
+
+	int 80H
+
+	jmp fin
+
 ErrorDivZ:
+	mov ax,4
+	mov bx,1
+	mov ecx,Err_002
+	mov dx,szErr_002
+
+	int 80H
+
 	jmp fin
