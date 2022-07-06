@@ -37,8 +37,6 @@ ArgCount	resd	1
 ArgPtrs		resq	3
 Caractere	resb	1
 
-
-
 SECTION .text
 
 global _start
@@ -61,7 +59,6 @@ _start:
 	mov DWORD [ArgCount],ecx
 	xor edx,edx
 	
-	
 recupererarguments:
 
 	pop rsi
@@ -74,7 +71,7 @@ recupererarguments:
 	push rcx
 
 	xor rcx,rcx
-	mov r8,0
+	xor r8,r8									; r8 contiendra la taille de chaque paramètre
 	cld
 
 copierdatas:
@@ -120,7 +117,7 @@ copierdatas:
 	dec r8										; ne pas envisager le '\0'
 	dec r8										; sinon on va dépasser le rang effectif
 	
-	mov r12,r8								; pour pouvoir gérer tous les digits il faut garder une trace du nombre de rangs (r8 être modifié)
+	mov r12,r8								; pour pouvoir gérer tous les digits il faut garder une trace du nombre de rangs (r8 sera modifié)
 	mov rsi,ArgPtrs						;	lodsb
 	mov rdi,strDividande			; stosb
 
@@ -193,7 +190,7 @@ unseuldigitdividande:
 	xor eax,eax
 	lodsb
 	stosb
-	sub al,48
+	sub al,48									; passer de l'ASCII (48 à 57) à notre système décimal (0 à 9)
 	add r10,rax								; on ajoute les unités
 	
 	; nous avons le dividande
